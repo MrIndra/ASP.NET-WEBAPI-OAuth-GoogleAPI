@@ -1,0 +1,143 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+    
+</head>
+<body style="padding-top:20px;">
+    <div class="container" style="width:70%;text-align:right">
+        <a class="btn btn-primary" href="Registration.html">Registration</a>
+    </div>
+    <div class="container" style="width:30%">
+        <h2>Login Page</h2>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" class="form-control" id="txtEmail" placeholder="Enter email" name="email">
+        </div>
+        <div class="form-group">
+            <label for="pwd">Password:</label>
+            <input type="password" class="form-control" id="txtPassword" placeholder="Enter password" name="pwd">
+        </div>
+
+        <button type="submit" id="btnLogin" class="btn btn-primary">Submit</button>
+        <br /><br />
+        <button type="submit" id="google" class="btn btn-success">Login with Google</button>
+
+        <div class="alert alert-success" id="success">
+            Success !
+        </div>
+        <div class="alert alert-warning" id="alert">
+
+        </div>
+
+    </div>
+    <script src="../Scripts/jquery-3.3.1.min.js"></script>
+    <script type="text/javascript">
+        $(document).ready(function () {
+            //getaccesstoken will be called everytime we hit the login page.
+            //on hitting, if we invoke login with google, it goes to google, get token and redirects to login page and hit getaccesstoken again
+            //this time, it has token so it goes to the getAccessToken method.
+            getAccessToken();
+            $('#alert').hide();
+            $('#success').hide();
+
+            $('#google').click(function () {
+                //issue a get request to this to get Google login page url.
+                //http://localhost:61541/api/Account/ExternalLogins?returnUrl=%2F&generateState=true
+                window.location.href = "http://localhost:61541/api/Account/ExternalLogin?provider=Google&response_type=token&client_id=self&redirect_uri=http%3A%2F%2Flocalhost%3A61541%2Fhtml%2FLogin.html&state=v0oBZgQRKr0Lp5eYNZfOy_SID1GhykANpuwKWEtIa081";
+            })
+
+            $('#btnLogin').click(function () {
+                $('#success').hide();
+                $('#alert').hide();
+                $.ajax({
+                    method: 'POST',
+                    url: 'http://localhost:61541/token', //calling IdentityConfig method Create method..
+                    contentType: 'application/json',
+                    data: {
+                        username: $('#txtEmail').val(),
+                        password: $('#txtPassword').val(),
+                        grant_type: 'password'
+                    },
+                    success: function (data) {
+                        $('#success').show().text(JSON.stringify(data));
+                        //sessionStorage.setItem("accessToken", data.access_token);
+                        localStorage.setItem("accessToken", data.access_token);
+                        window.location.href = "data.html";
+                    },
+                    error: function (jqXHR) {
+                        $('#alert').show().text(jqXHR.responseText);
+                    }
+                });
+            });
+        
+
+
+        function getAccessToken() { //if hash is there, slot it, and check for identity.
+            alert("First call");
+            if (location.hash) {
+                alert("HASHED");
+                if (location.hash.split('access_token=')) {
+                    var accessToken = location.hash.split('access_token=')[1].split('&')[0];
+                    alert(accessToken);
+                    if (accessToken) {
+                        isUserRegistered(accessToken); //calling userInfo
+                    }
+                }
+            }
+        };
+
+        function isUserRegistered(accessToken) {
+            alert("isuserRegiterd");
+            $.ajax({
+                url: '/api/Account/UserInfo',
+                method: 'GET',
+                headers: {
+                    'content-type': 'application/JSON',
+                    'Authorization': 'Bearer ' + accessToken
+                },
+                success: function (response) {
+                    alert("if user is registerd" + response);
+                    if (response.HasRegistered) { //if userInfo is true, meaning it is present in database. store the token in localstorage.
+                        alert('registerd');
+                        localStorage.setItem('accessToken', accessToken);
+                        localStorage.setItem('userName', response.Email);
+                        window.location.href = "data.html";//redirect to data.html
+                    }
+                    else {
+                        alert('not registerd');
+                        signupExternalUser(accessToken);//if not present in database, call signupExternaluser.
+                    }
+                }
+
+            });
+        }
+
+        function signupExternalUser(accessToken) { //register the user in database...
+            alert('came to sign up');
+            $.ajax({
+                url: '/api/Account/RegisterExternal',
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/JSON',
+                    'Authorization': 'Bearer ' + accessToken
+                },
+                success: function (response) { //call again google for new tokens...this time..again step 1 will gt repeated i.e getAccessToken/
+                    alert("re-directing again to Google" + response);
+                    window.location.href = "http://localhost:61541/api/Account/ExternalLogin?provider=Google&response_type=token&client_id=self&redirect_uri=http%3A%2F%2Flocalhost%3A61541%2Fhtml%2FLogin.html&state=v0oBZgQRKr0Lp5eYNZfOy_SID1GhykANpuwKWEtIa081";
+                    // then, again step 1, and then split it and the chek if user is present..so this time it will be true and redirect to data.html.
+                },
+                error: function (jqXHR) {
+                    alert(jqXHR.responseText);
+                } 
+
+            });
+            }
+        });
+    </script>
+</body>
+</html >
